@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بوابة ألمانيا العالمية | Germany Gateway Global</title>
+    
+    <!-- 1. Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { dark: '#0f172a', primary: '#2563eb', secondary: '#4f46e5', gold: '#f59e0b' }
+                    },
+                    animation: {
+                        'float': 'float 6s ease-in-out infinite',
+                        'slide-up': 'slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+                    },
+                    keyframes: {
+                        float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-20px)' } },
+                        slideUp: { '0%': { transform: 'translateY(50px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- 2. Libraries -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    
+    <!-- Fonts: Tajawal for Arabic, Inter for Latin -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;900&family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet"/>
+
+    <style>
+        /* Dynamic Font based on Lang */
+        :root { --main-font: 'Tajawal', sans-serif; }
+        html[lang="en"], html[lang="de"] { --main-font: 'Inter', sans-serif; }
+        body { font-family: var(--main-font); overflow-x: hidden; }
+        
+        .glass {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+        }
+        .dark .glass {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #2563eb, #4f46e5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        #germany-map { height: 500px; width: 100%; border-radius: 1.5rem; z-index: 1; }
+        .view-section { display: none; opacity: 0; transition: opacity 0.4s ease; }
+        .view-section.active { display: block; opacity: 1; animation: slideUp 0.6s forwards; }
+        
+        #chat-window { transition: transform 0.3s, opacity 0.3s; transform-origin: bottom right; }
+        html[dir="ltr"] #chat-window { transform-origin: bottom left; }
+        #chat-window.hidden-chat { transform: scale(0); opacity: 0; pointer-events: none; }
+    </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 dark:bg-[#020617] dark:text-slate-100 transition-colors duration-500">
+
+    <!-- News Ticker -->
+    <div class="bg-brand-primary text-white text-xs font-bold py-2 overflow-hidden relative z-50">
+        <div class="whitespace-nowrap animate-[marquee_20s_linear_infinite] inline-block px-4" data-i18n="ticker">
+            🚀 عاجل: قانون الهجرة الجديد يسهل استقدام العائلات  |  💶 زيادة الحد الأدنى للأجور إلى 12.41 يورو  |  🇩🇪 ألمانيا تطلب 400 ألف عامل سنوياً
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="sticky top-0 w-full z-40 bg-white/80 dark:bg-[#0f172a]/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('home')">
+                <div class="relative w-10 h-10 flex items-center justify-center bg-brand-primary rounded-lg text-white font-black text-lg shadow-lg">DE</div>
+                <div>
+                    <h1 class="font-extrabold text-lg dark:text-white leading-none">
+                        <span data-i18n="app_title">بوابة ألمانيا</span> 
+                        <span class="text-brand-gold text-xs">GLOBAL</span>
+                    </h1>
+                </div>
+            </div>
+            
+            <div class="hidden lg:flex items-center gap-2 bg-slate-100/50 dark:bg-slate-800/50 p-1.5 rounded-2xl border border-white/20">
+                <button onclick="switchTab('home')" id="btn-home" class="nav-btn px-4 py-2 rounded-xl text-sm font-bold transition-all bg-white dark:bg-slate-700 shadow-sm text-brand-primary dark:text-white" data-i18n="nav_home">الرئيسية</button>
+                <button onclick="switchTab('jobs')" id="btn-jobs" class="nav-btn px-4 py-2 rounded-xl text-sm font-bold transition-all text-slate-500 hover:text-brand-primary" data-i18n="nav_jobs">الوظائف</button>
+                <button onclick="switchTab('cv')" id="btn-cv" class="nav-btn px-4 py-2 rounded-xl text-sm font-bold transition-all text-slate-500 hover:text-brand-primary" data-i18n="nav_cv">السيرة الذاتية</button>
+                <button onclick="switchTab('housing')" id="btn-housing" class="nav-btn px-4 py-2 rounded-xl text-sm font-bold transition-all text-slate-500 hover:text-brand-primary" data-i18n="nav_housing">السكن</button>
+                <button onclick="switchTab('tools')" id="btn-tools" class="nav-btn px-4 py-2 rounded-xl text-sm font-bold transition-all text-slate-500 hover:text-brand-primary" data-i18n="nav_tools">الأدوات</button>
+                <button onclick="switchTab('family')" id="btn-family" class="nav-btn px-4 py-2 rounded-xl text-sm font-bold transition-all text-slate-500 hover:text-brand-primary" data-i18n="nav_family">العائلة</button>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <!-- Language Switcher -->
+                <div class="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+                    <button onclick="setLanguage('ar')" class="lang-btn px-2 py-1 text-xs font-bold rounded hover:bg-white dark:hover:bg-slate-600 transition-colors" id="lang-ar">AR</button>
+                    <button onclick="setLanguage('en')" class="lang-btn px-2 py-1 text-xs font-bold rounded hover:bg-white dark:hover:bg-slate-600 transition-colors text-slate-400" id="lang-en">EN</button>
+                    <button onclick="setLanguage('de')" class="lang-btn px-2 py-1 text-xs font-bold rounded hover:bg-white dark:hover:bg-slate-600 transition-colors text-slate-400" id="lang-de">DE</button>
+                </div>
+
+                <button onclick="toggleTheme()" class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center transition-colors hover:bg-slate-200 dark:hover:bg-slate-700">
+                    <i data-lucide="moon" class="w-5 h-5 hidden dark:block text-blue-400"></i>
+                    <i data-lucide="sun" class="w-5 h-5 block dark:hidden text-orange-500"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 pt-10 pb-32">
+
+        <!-- ================= 1. HOME DASHBOARD ================= -->
+        <section id="view-home" class="view-section active">
+            <div class="relative rounded-[2rem] bg-[#020617] overflow-hidden min-h-[450px] flex items-center p-8 md:p-16 shadow-2xl shadow-blue-900/20 mb-10 group">
+                <div class="absolute inset-0 opacity-20 bg-[radial-gradient(#2563eb_1px,transparent_1px)] [background-size:24px_24px]"></div>
+                <div class="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[100px] animate-float"></div>
+                <div class="absolute bottom-[-20%] left-[-10%] w-[400px] h-[400px] bg-purple-600/20 rounded-full blur-[100px] animate-float" style="animation-delay: 2s"></div>
+
+                <div class="relative z-10 grid md:grid-cols-2 gap-12 items-center">
+                    <div>
+                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/50 border border-slate-700 text-blue-400 text-xs font-bold mb-6 backdrop-blur-md">
+                            <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                            <span data-i18n="sys_status">النظام يعمل بكامل طاقته</span>
+                        </div>
+                        <h1 class="text-5xl md:text-7xl font-black text-white mb-6 leading-tight">
+                            <span data-i18n="hero_title_1">بوابة</span> <span class="gradient-text" data-i18n="hero_title_2">أوروبا</span> <br><span data-i18n="hero_title_3">بين يديك.</span>
+                        </h1>
+                        <p class="text-slate-400 text-lg mb-8 leading-relaxed max-w-lg" data-i18n="hero_desc">
+                            نظام بيئي متكامل يوفر لك الوظائف، السكن، صياغة الـ CV الألماني، وحسابات الدعم الحكومي بدقة متناهية.
+                        </p>
+                        <div class="flex gap-4">
+                            <button onclick="switchTab('jobs')" class="bg-brand-primary hover:bg-blue-600 text-white px-8 py-4 rounded-xl font-bold transition-all hover:scale-105 shadow-xl shadow-blue-600/20" data-i18n="hero_btn_1">ابدأ البحث</button>
+                            <button onclick="toggleChat()" class="bg-white/10 hover:bg-white/20 backdrop-blur text-white px-8 py-4 rounded-xl font-bold transition-all border border-white/10" data-i18n="hero_btn_2">اسأل المستشار</button>
+                        </div>
+                    </div>
+                    <!-- Stats Grid -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="glass p-6 rounded-2xl border-l-4 border-blue-500 ltr:border-l-0 ltr:border-r-4">
+                            <i data-lucide="briefcase" class="w-8 h-8 text-blue-500 mb-3"></i>
+                            <h3 class="text-3xl font-black dark:text-white">100+</h3>
+                            <p class="text-xs text-slate-500" data-i18n="stat_jobs">وظيفة متاحة</p>
+                        </div>
+                        <div class="glass p-6 rounded-2xl border-l-4 border-green-500 ltr:border-l-0 ltr:border-r-4">
+                            <i data-lucide="euro" class="w-8 h-8 text-green-500 mb-3"></i>
+                            <h3 class="text-3xl font-black dark:text-white">45K€</h3>
+                            <p class="text-xs text-slate-500" data-i18n="stat_salary">متوسط الرواتب</p>
+                        </div>
+                        <div class="glass p-6 rounded-2xl border-l-4 border-purple-500 ltr:border-l-0 ltr:border-r-4">
+                            <i data-lucide="home" class="w-8 h-8 text-purple-500 mb-3"></i>
+                            <h3 class="text-3xl font-black dark:text-white">2.5K</h3>
+                            <p class="text-xs text-slate-500" data-i18n="stat_housing">شقة للإيجار</p>
+                        </div>
+                        <div class="glass p-6 rounded-2xl border-l-4 border-yellow-500 ltr:border-l-0 ltr:border-r-4">
+                            <i data-lucide="users" class="w-8 h-8 text-yellow-500 mb-3"></i>
+                            <h3 class="text-3xl font-black dark:text-white">12M</h3>
+                            <p class="text-xs text-slate-500" data-i18n="stat_users">مغترب</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Access -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <button onclick="switchTab('cv')" class="glass p-6 rounded-2xl hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors group text-center">
+                    <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform"><i data-lucide="file-text"></i></div>
+                    <h3 class="font-bold dark:text-white" data-i18n="qa_cv">صانع الـ CV</h3>
+                </button>
+                <button onclick="switchTab('housing')" class="glass p-6 rounded-2xl hover:bg-purple-50 dark:hover:bg-slate-800 transition-colors group text-center">
+                    <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform"><i data-lucide="building"></i></div>
+                    <h3 class="font-bold dark:text-white" data-i18n="qa_housing">بحث سكن</h3>
+                </button>
+                <button onclick="switchTab('family')" class="glass p-6 rounded-2xl hover:bg-green-50 dark:hover:bg-slate-800 transition-colors group text-center">
+                    <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform"><i data-lucide="baby"></i></div>
+                    <h3 class="font-bold dark:text-white">Kindergeld</h3>
+                </button>
+                <button onclick="switchTab('tools')" class="glass p-6 rounded-2xl hover:bg-yellow-50 dark:hover:bg-slate-800 transition-colors group text-center">
+                    <div class="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform"><i data-lucide="check-circle"></i></div>
+                    <h3 class="font-bold dark:text-white" data-i18n="qa_visa">قائمة الفيزا</h3>
+                </button>
+            </div>
+        </section>
+
+        <!-- ================= 2. JOBS ENGINE ================= -->
+        <section id="view-jobs" class="view-section">
+            <div class="flex justify-between items-end mb-6">
+                <div>
+                    <h2 class="text-3xl font-black dark:text-white mb-2" data-i18n="jobs_title">محرك الوظائف الذكي</h2>
+                    <p class="text-slate-500" data-i18n="jobs_subtitle">تحليل مباشر لسوق العمل الألماني</p>
+                </div>
+                <button onclick="loadAllJobs()" class="bg-blue-100 text-blue-600 p-3 rounded-xl hover:bg-blue-200 transition-colors"><i data-lucide="refresh-ccw"></i></button>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="glass p-2 rounded-2xl mb-8 flex items-center gap-2 border-2 border-transparent focus-within:border-brand-primary transition-colors">
+                <i data-lucide="search" class="text-slate-400 mx-2"></i>
+                <input type="text" id="job-search" placeholder="Developer, Engineer..." class="w-full bg-transparent outline-none dark:text-white py-3" onkeyup="filterJobs()">
+                <div class="hidden md:flex gap-2">
+                    <select id="city-filter" onchange="filterJobs()" class="bg-slate-100 dark:bg-slate-800 dark:text-white text-sm rounded-lg px-4 py-2 outline-none cursor-pointer">
+                        <option value="" data-i18n="filter_all">كل المدن</option>
+                        <option value="Berlin">Berlin</option>
+                        <option value="Munich">Munich</option>
+                        <option value="Hamburg">Hamburg</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="loader" class="text-center py-20 hidden">
+                <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p class="text-slate-500 animate-pulse" data-i18n="loading">جاري التحميل...</p>
+            </div>
+
+            <div id="jobs-container" class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+                <!-- Dynamic Content -->
+            </div>
+        </section>
+
+        <!-- ================= 3. CV BUILDER (Multilingual) ================= -->
+        <section id="view-cv" class="view-section">
+            <div class="grid lg:grid-cols-5 gap-8">
+                <!-- Form -->
+                <div class="lg:col-span-2 glass p-6 rounded-3xl h-fit">
+                    <h2 class="text-2xl font-bold dark:text-white mb-6 flex items-center gap-2"><i data-lucide="pen-tool" class="text-blue-500"></i> <span data-i18n="cv_form_title">بيانات السيرة الذاتية</span></h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 block mb-1" data-i18n="cv_label_name">الاسم الكامل</label>
+                            <input type="text" id="cv-name" class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none outline-none dark:text-white" placeholder="Max Mustermann" oninput="updateCV()">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 block mb-1" data-i18n="cv_label_job">المسمى الوظيفي</label>
+                            <input type="text" id="cv-title" class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none outline-none dark:text-white" placeholder="Software Developer" oninput="updateCV()">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs font-bold text-slate-500 block mb-1" data-i18n="cv_label_phone">الهاتف</label>
+                                <input type="text" id="cv-phone" class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none outline-none dark:text-white" placeholder="+49 123..." oninput="updateCV()">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-500 block mb-1" data-i18n="cv_label_email">البريد الإلكتروني</label>
+                                <input type="text" id="cv-email" class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none outline-none dark:text-white" placeholder="email@example.com" oninput="updateCV()">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 block mb-1" data-i18n="cv_label_summary">نبذة عنك</label>
+                            <textarea id="cv-summary" class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none outline-none dark:text-white h-24" placeholder="Brief description..." oninput="updateCV()"></textarea>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 block mb-1" data-i18n="cv_label_exp">الخبرات</label>
+                            <textarea id="cv-exp" class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none outline-none dark:text-white h-24" placeholder="- 2020-2023: Job Title at Company..." oninput="updateCV()"></textarea>
+                        </div>
+                        <button onclick="downloadCV()" class="w-full bg-brand-primary text-white py-3 rounded-xl font-bold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2" data-i18n="cv_btn_download"><i data-lucide="download"></i> تحميل PDF/صورة</button>
+                    </div>
+                </div>
+
+                <!-- Preview (Adaptive Language) -->
+                <div class="lg:col-span-3 bg-gray-200 dark:bg-gray-800 p-8 rounded-3xl flex justify-center overflow-auto">
+                    <div id="cv-preview" class="bg-white text-slate-800 w-[595px] min-h-[842px] p-10 shadow-2xl relative text-left" dir="ltr">
+                        <div class="border-l-4 border-blue-900 pl-6 mb-8">
+                            <h1 id="prev-name" class="text-4xl font-black text-blue-900 uppercase tracking-widest mb-2">Max Mustermann</h1>
+                            <p id="prev-title" class="text-xl text-slate-500 font-light">Software Engineer</p>
+                        </div>
+                        
+                        <div class="grid grid-cols-3 gap-8 mb-8">
+                            <div class="col-span-1 text-sm text-slate-500 space-y-1 border-r border-slate-100 pr-4">
+                                <p class="font-bold text-blue-900 mb-2" id="cv-head-contact">KONTAKT</p>
+                                <p id="prev-phone">+49 123 456 789</p>
+                                <p id="prev-email">max@email.com</p>
+                                <p>Berlin, Deutschland</p>
+                            </div>
+                            <div class="col-span-2">
+                                <h3 class="font-bold text-blue-900 border-b border-slate-200 pb-1 mb-2" id="cv-head-profile">PROFIL</h3>
+                                <p id="prev-summary" class="text-sm leading-relaxed text-slate-600">
+                                    Motivated professional with experience in...
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mb-8">
+                            <h3 class="font-bold text-blue-900 border-b border-slate-200 pb-1 mb-4" id="cv-head-exp">BERUFSERFAHRUNG</h3>
+                            <div id="prev-exp" class="text-sm space-y-2 text-slate-600 whitespace-pre-line">
+                                - 2020-2023: Senior Developer @ Tech Co.
+                                - 2018-2020: Junior Developer @ StartUp
+                            </div>
+                        </div>
+
+                        <div class="absolute bottom-10 right-10 opacity-10">
+                            <div class="text-6xl font-black text-slate-300">DE</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= 4. HOUSING ================= -->
+        <section id="view-housing" class="view-section">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold dark:text-white" data-i18n="housing_title">ImmoSearch - البحث عن سكن</h2>
+                <p class="text-slate-500" data-i18n="housing_subtitle">محاكاة لأحدث عروض الشقق في المدن الكبرى</p>
+            </div>
+            
+            <div class="flex flex-wrap gap-2 justify-center mb-8">
+                <button class="px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-sm font-bold dark:text-white hover:bg-brand-primary hover:text-white transition-colors">Berlin</button>
+                <button class="px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-sm font-bold dark:text-white hover:bg-brand-primary hover:text-white transition-colors">Munich</button>
+                <button class="px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-sm font-bold dark:text-white hover:bg-brand-primary hover:text-white transition-colors">Hamburg</button>
+                <button class="px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-sm font-bold dark:text-white hover:bg-brand-primary hover:text-white transition-colors">< 1000€</button>
+            </div>
+
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Mock Listing 1 -->
+                <div class="glass rounded-2xl overflow-hidden group hover:-translate-y-2 transition-transform duration-300">
+                    <div class="h-48 bg-gray-300 relative">
+                        <img src="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=500&q=60" class="w-full h-full object-cover">
+                        <span class="absolute top-2 right-2 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded">Available</span>
+                    </div>
+                    <div class="p-5">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="font-bold text-lg dark:text-white">Modern Studio</h3>
+                            <span class="text-brand-primary font-black">850€</span>
+                        </div>
+                        <p class="text-sm text-slate-500 mb-4"><i data-lucide="map-pin" class="w-3 h-3 inline"></i> Mitte, Berlin</p>
+                        <div class="flex gap-4 text-xs text-slate-500 border-t border-slate-100 dark:border-slate-700 pt-3">
+                            <span><i data-lucide="maximize" class="w-3 h-3 inline"></i> 45 m²</span>
+                            <span><i data-lucide="bed" class="w-3 h-3 inline"></i> 1 Room</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Mock Listing 2 -->
+                <div class="glass rounded-2xl overflow-hidden group hover:-translate-y-2 transition-transform duration-300">
+                    <div class="h-48 bg-gray-300 relative">
+                        <img src="https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=500&q=60" class="w-full h-full object-cover">
+                    </div>
+                    <div class="p-5">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="font-bold text-lg dark:text-white">Family Apartment</h3>
+                            <span class="text-brand-primary font-black">1,200€</span>
+                        </div>
+                        <p class="text-sm text-slate-500 mb-4"><i data-lucide="map-pin" class="w-3 h-3 inline"></i> Schwabing, Munich</p>
+                        <div class="flex gap-4 text-xs text-slate-500 border-t border-slate-100 dark:border-slate-700 pt-3">
+                            <span><i data-lucide="maximize" class="w-3 h-3 inline"></i> 85 m²</span>
+                            <span><i data-lucide="bed" class="w-3 h-3 inline"></i> 3 Rooms</span>
+                        </div>
+                    </div>
+                </div>
+                 <!-- Mock Listing 3 -->
+                <div class="glass rounded-2xl overflow-hidden group hover:-translate-y-2 transition-transform duration-300">
+                    <div class="h-48 bg-gray-300 relative">
+                        <img src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=500&q=60" class="w-full h-full object-cover">
+                    </div>
+                    <div class="p-5">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="font-bold text-lg dark:text-white">Loft Style Apartment</h3>
+                            <span class="text-brand-primary font-black">980€</span>
+                        </div>
+                        <p class="text-sm text-slate-500 mb-4"><i data-lucide="map-pin" class="w-3 h-3 inline"></i> Altona, Hamburg</p>
+                        <div class="flex gap-4 text-xs text-slate-500 border-t border-slate-100 dark:border-slate-700 pt-3">
+                            <span><i data-lucide="maximize" class="w-3 h-3 inline"></i> 60 m²</span>
+                            <span><i data-lucide="bed" class="w-3 h-3 inline"></i> 2 Rooms</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= 5. TOOLS & MAP ================= -->
+        <section id="view-tools" class="view-section">
+            <div class="grid lg:grid-cols-2 gap-8">
+                <div class="glass p-8 rounded-3xl h-full">
+                    <h3 class="text-xl font-bold dark:text-white mb-4"><i data-lucide="map" class="inline mr-2 text-blue-500"></i> <span data-i18n="map_title">الخريطة التفاعلية</span></h3>
+                    <div id="germany-map" class="rounded-xl shadow-inner"></div>
+                </div>
+                
+                <div class="space-y-6">
+                    <!-- Visa Checklist -->
+                    <div class="glass p-6 rounded-3xl border-r-4 border-purple-500 ltr:border-r-0 ltr:border-l-4">
+                        <h3 class="font-bold dark:text-white mb-4" data-i18n="visa_title">قائمة تدقيق التأشيرة</h3>
+                        <div id="visa-list" class="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scroll">
+                            <!-- JS Generated -->
+                        </div>
+                        <div class="mt-4 bg-gray-200 dark:bg-gray-700 h-2 rounded-full overflow-hidden">
+                            <div id="progress-bar" class="bg-purple-500 h-full w-0 transition-all duration-500"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Salary Calc -->
+                    <div class="glass p-6 rounded-3xl border-r-4 border-red-500 ltr:border-r-0 ltr:border-l-4">
+                        <h3 class="font-bold dark:text-white mb-4" data-i18n="salary_title">حاسبة صافي الدخل</h3>
+                        <div class="flex gap-2">
+                            <input type="number" id="gross-salary" placeholder="50000" class="flex-1 p-2 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-white border outline-none">
+                            <button onclick="calcNetSalary()" class="bg-red-500 text-white px-4 rounded-lg font-bold" data-i18n="btn_calc">احسب</button>
+                        </div>
+                        <div id="net-result" class="mt-4 font-bold text-center text-xl text-slate-600 dark:text-slate-300">-- €</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= 6. FAMILY (PERSONALIZED) ================= -->
+        <section id="view-family" class="view-section">
+            <div class="max-w-3xl mx-auto">
+                <div class="glass p-10 rounded-[3rem] border-t-8 border-green-500 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-full blur-3xl"></div>
+                    
+                    <div class="text-center mb-8">
+                        <div class="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-lg animate-bounce">👶</div>
+                        <h2 class="text-3xl font-black dark:text-white">Kindergeld 2025</h2>
+                        <p class="text-slate-500" data-i18n="family_subtitle">حاسبة ذكية مخصصة لعائلتك</p>
+                    </div>
+
+                    <!-- Personalized Check -->
+                    <div class="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-2xl mb-8 border border-blue-100 dark:border-blue-800">
+                        <h3 class="font-bold text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-2"><i data-lucide="calendar"></i> <span data-i18n="check_age_title">التحقق من العمر</span></h3>
+                        <div class="flex gap-4 items-center">
+                            <div class="flex-1">
+                                <label class="text-xs text-slate-500 block mb-1" data-i18n="birth_label">تاريخ ميلاد الطفلة</label>
+                                <input type="date" id="birth-date" value="2025-01-25" class="w-full p-2 rounded-lg border-none bg-white dark:bg-slate-800 dark:text-white font-bold">
+                            </div>
+                            <button onclick="checkEligibility()" class="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold h-fit mt-5 hover:bg-blue-700" data-i18n="btn_check">تحقق</button>
+                        </div>
+                        <p id="eligibility-msg" class="text-sm mt-3 font-medium hidden"></p>
+                    </div>
+
+                    <div class="space-y-6">
+                        <div class="flex items-center justify-between bg-slate-50 dark:bg-slate-800 p-4 rounded-xl">
+                            <span class="font-bold dark:text-white" data-i18n="child_count">عدد الأطفال</span>
+                            <div class="flex items-center gap-3">
+                                <button onclick="adjustChild(-1)" class="w-10 h-10 rounded-lg bg-white dark:bg-slate-700 shadow flex items-center justify-center font-bold hover:scale-110 transition-transform">-</button>
+                                <span id="child-count-display" class="text-2xl font-black w-8 text-center dark:text-white">1</span>
+                                <button onclick="adjustChild(1)" class="w-10 h-10 rounded-lg bg-white dark:bg-slate-700 shadow flex items-center justify-center font-bold hover:scale-110 transition-transform">+</button>
+                            </div>
+                        </div>
+
+                        <div id="kg-total" class="text-center py-6">
+                            <p class="text-slate-400 text-sm uppercase tracking-widest font-bold" data-i18n="monthly_total">الاستحقاق الشهري</p>
+                            <div class="text-7xl font-black text-green-600 mt-2 tracking-tighter" id="kg-amount">255 €</div>
+                            <div class="text-sm text-slate-500 mt-2"><span data-i18n="yearly_total">سنوياً</span>: <span class="font-bold text-slate-800 dark:text-white" id="kg-yearly">3,060 €</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- AI CHAT BOT FLOATING -->
+    <div class="fixed bottom-24 right-6 left-auto ltr:right-auto ltr:left-6 z-50 flex flex-col items-end ltr:items-start">
+        <!-- Chat Window -->
+        <div id="chat-window" class="hidden-chat w-80 md:w-96 h-[450px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 flex flex-col mb-4 overflow-hidden">
+            <div class="bg-brand-primary p-4 flex justify-between items-center text-white">
+                <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    <span class="font-bold" data-i18n="chat_title">المستشار الذكي</span>
+                </div>
+                <button onclick="toggleChat()"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto bg-slate-50 dark:bg-slate-900 space-y-3 text-sm">
+                <div class="bg-blue-100 dark:bg-slate-700 text-slate-800 dark:text-white p-3 rounded-t-xl rounded-be-xl w-fit max-w-[85%] ltr:rounded-be-0 ltr:rounded-bl-xl">
+                    <span data-i18n="chat_welcome">مرحباً! أنا هنا لمساعدتك في أسئلة العمل، الفيزا، أو السكن في ألمانيا. 🤖</span>
+                </div>
+            </div>
+            <div class="p-3 border-t dark:border-slate-700 bg-white dark:bg-slate-800 flex gap-2">
+                <input type="text" id="chat-input" placeholder="..." class="flex-1 bg-slate-100 dark:bg-slate-700 rounded-lg px-3 py-2 text-sm outline-none dark:text-white" onkeypress="handleChat(event)">
+                <button onclick="sendMessage()" class="bg-brand-primary text-white p-2 rounded-lg"><i data-lucide="send" class="w-4 h-4"></i></button>
+            </div>
+        </div>
+        
+        <!-- Toggle Button -->
+        <button onclick="toggleChat()" class="w-16 h-16 bg-brand-primary rounded-full shadow-2xl flex items-center justify-center text-white hover:scale-110 transition-transform hover:rotate-12 border-4 border-white dark:border-slate-900">
+            <i data-lucide="bot" class="w-8 h-8"></i>
+        </button>
+    </div>
+
+    <!-- Navigation Mobile -->
+    <div class="lg:hidden fixed bottom-4 left-4 right-4 bg-[#0f172a]/95 backdrop-blur-md text-white p-3 rounded-2xl flex justify-around z-50 shadow-2xl border border-white/10">
+        <button onclick="switchTab('home')" class="nav-icon opacity-70 hover:opacity-100"><i data-lucide="home"></i></button>
+        <button onclick="switchTab('jobs')" class="nav-icon opacity-70 hover:opacity-100"><i data-lucide="briefcase"></i></button>
+        <button onclick="switchTab('cv')" class="nav-icon opacity-70 hover:opacity-100"><i data-lucide="file-text"></i></button>
+        <button onclick="switchTab('family')" class="nav-icon opacity-70 hover:opacity-100"><i data-lucide="baby"></i></button>
+    </div>
+
+    <script>
+        // --- TRANSLATIONS CONFIG ---
+        const translations = {
+            ar: {
+                app_title: "بوابة ألمانيا",
+                nav_home: "الرئيسية", nav_jobs: "الوظائف", nav_cv: "السيرة الذاتية", nav_housing: "السكن", nav_tools: "الأدوات", nav_family: "العائلة",
+                sys_status: "النظام يعمل بكامل طاقته",
+                hero_title_1: "بوابة", hero_title_2: "أوروبا", hero_title_3: "بين يديك.",
+                hero_desc: "نظام بيئي متكامل يوفر لك الوظائف، السكن، صياغة الـ CV الألماني، وحسابات الدعم الحكومي بدقة متناهية.",
+                hero_btn_1: "ابدأ البحث", hero_btn_2: "اسأل المستشار",
+                stat_jobs: "وظيفة متاحة", stat_salary: "متوسط الرواتب", stat_housing: "شقة للإيجار", stat_users: "مغترب",
+                qa_cv: "صانع الـ CV", qa_housing: "بحث سكن", qa_visa: "قائمة الفيزا",
+                jobs_title: "محرك الوظائف الذكي", jobs_subtitle: "تحليل مباشر لسوق العمل الألماني",
+                cv_form_title: "بيانات السيرة الذاتية", cv_label_name: "الاسم الكامل", cv_label_job: "المسمى الوظيفي", cv_label_phone: "الهاتف", cv_label_email: "البريد", cv_label_summary: "نبذة عنك", cv_label_exp: "الخبرات", cv_btn_download: "تحميل PDF",
+                cv_head_contact: "KONTAKT", cv_head_profile: "PROFIL", cv_head_exp: "BERUFSERFAHRUNG",
+                housing_title: "ImmoSearch - البحث عن سكن", housing_subtitle: "محاكاة لأحدث عروض الشقق",
+                map_title: "الخريطة التفاعلية", visa_title: "قائمة تدقيق التأشيرة", salary_title: "حاسبة صافي الدخل", btn_calc: "احسب",
+                family_subtitle: "حاسبة ذكية مخصصة لعائلتك", check_age_title: "التحقق من العمر", birth_label: "تاريخ الميلاد", btn_check: "تحقق", child_count: "عدد الأطفال", monthly_total: "الاستحقاق الشهري", yearly_total: "سنوياً",
+                chat_title: "المستشار الذكي", chat_welcome: "مرحباً! كيف يمكنني مساعدتك في ألمانيا اليوم؟",
+                filter_all: "كل المدن", loading: "جاري التحميل..."
+            },
+            en: {
+                app_title: "Germany Gateway",
+                nav_home: "Home", nav_jobs: "Jobs", nav_cv: "CV Builder", nav_housing: "Housing", nav_tools: "Tools", nav_family: "Family",
+                sys_status: "System Fully Operational",
+                hero_title_1: "Europe's", hero_title_2: "Gateway", hero_title_3: "In Your Hands.",
+                hero_desc: "An integrated ecosystem for jobs, housing, German CV building, and government support calculations.",
+                hero_btn_1: "Start Searching", hero_btn_2: "Ask Advisor",
+                stat_jobs: "Jobs Available", stat_salary: "Avg. Salary", stat_housing: "Apartments", stat_users: "Expats",
+                qa_cv: "CV Builder", qa_housing: "Housing", qa_visa: "Visa List",
+                jobs_title: "Smart Job Engine", jobs_subtitle: "Live analysis of the German labor market",
+                cv_form_title: "CV Details", cv_label_name: "Full Name", cv_label_job: "Job Title", cv_label_phone: "Phone", cv_label_email: "Email", cv_label_summary: "Profile", cv_label_exp: "Experience", cv_btn_download: "Download PDF",
+                cv_head_contact: "CONTACT", cv_head_profile: "PROFILE", cv_head_exp: "EXPERIENCE",
+                housing_title: "ImmoSearch - Housing", housing_subtitle: "Simulated listings in major cities",
+                map_title: "Interactive Map", visa_title: "Visa Checklist", salary_title: "Net Salary Calc", btn_calc: "Calculate",
+                family_subtitle: "Smart Calculator for your family", check_age_title: "Age Check", birth_label: "Birth Date", btn_check: "Check", child_count: "Children Count", monthly_total: "Monthly Total", yearly_total: "Yearly",
+                chat_title: "Smart Advisor", chat_welcome: "Hello! How can I help you with Germany today?",
+                filter_all: "All Cities", loading: "Loading..."
+            },
+            de: {
+                app_title: "Deutschland Portal",
+                nav_home: "Startseite", nav_jobs: "Stellen", nav_cv: "Lebenslauf", nav_housing: "Wohnen", nav_tools: "Tools", nav_family: "Familie",
+                sys_status: "System Betriebsbereit",
+                hero_title_1: "Europas", hero_title_2: "Tor", hero_title_3: "In Deiner Hand.",
+                hero_desc: "Ein integriertes Ökosystem für Jobs, Wohnen, Lebenslauf-Erstellung und staatliche Förderungen.",
+                hero_btn_1: "Suche Starten", hero_btn_2: "Berater Fragen",
+                stat_jobs: "Offene Stellen", stat_salary: "Ø Gehalt", stat_housing: "Wohnungen", stat_users: "Expats",
+                qa_cv: "Lebenslauf", qa_housing: "Wohnungssuche", qa_visa: "Visum Liste",
+                jobs_title: "Smarte Jobsuche", jobs_subtitle: "Live-Analyse des deutschen Arbeitsmarktes",
+                cv_form_title: "Lebenslauf Details", cv_label_name: "Voller Name", cv_label_job: "Berufsbezeichnung", cv_label_phone: "Telefon", cv_label_email: "E-Mail", cv_label_summary: "Profil", cv_label_exp: "Erfahrung", cv_btn_download: "PDF Herunterladen",
+                cv_head_contact: "KONTAKT", cv_head_profile: "PROFIL", cv_head_exp: "BERUFSERFAHRUNG",
+                housing_title: "ImmoSearch - Wohnen", housing_subtitle: "Simulierte Angebote in Großstädten",
+                map_title: "Interaktive Karte", visa_title: "Visum Checkliste", salary_title: "Netto Rechner", btn_calc: "Berechnen",
+                family_subtitle: "Smarter Rechner für deine Familie", check_age_title: "Altersprüfung", birth_label: "Geburtsdatum", btn_check: "Prüfen", child_count: "Anzahl Kinder", monthly_total: "Monatlich", yearly_total: "Jährlich",
+                chat_title: "Smarter Berater", chat_welcome: "Hallo! Wie kann ich dir heute helfen?",
+                filter_all: "Alle Städte", loading: "Laden..."
+            }
+        };
+
+        let currentLang = 'ar';
+
+        // --- Core ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            loadAllJobs();
+            initVisaChecklist();
+            initMap();
+            setLanguage('ar'); // Default
+        });
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            const dir = lang === 'ar' ? 'rtl' : 'ltr';
+            document.documentElement.dir = dir;
+            document.documentElement.lang = lang;
+            
+            // Highlight Button
+            document.querySelectorAll('.lang-btn').forEach(b => b.classList.add('text-slate-400'));
+            document.getElementById(`lang-${lang}`).classList.remove('text-slate-400');
+            document.getElementById(`lang-${lang}`).classList.add('text-brand-primary');
+
+            // Update Text
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if(translations[lang][key]) {
+                    el.innerText = translations[lang][key];
+                }
+            });
+
+            // Update CV Headers dynamically based on language choice
+            updateCVHeaders(lang);
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.view-section').forEach(el => {
+                el.classList.remove('active');
+                setTimeout(() => { if(!el.classList.contains('active')) el.style.display = 'none'; }, 300);
+            });
+            const target = document.getElementById(`view-${tabId}`);
+            if(target) {
+                target.style.display = 'block';
+                setTimeout(() => target.classList.add('active'), 10);
+            }
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        }
+
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+        }
+
+        // --- Job Engine ---
+        let globalJobs = [];
+        async function loadAllJobs() {
+            const container = document.getElementById('jobs-container');
+            const loader = document.getElementById('loader');
+            if(globalJobs.length > 0) return;
+
+            container.innerHTML = '';
+            loader.classList.remove('hidden');
+
+            try {
+                const pages = [1, 2];
+                const promises = pages.map(p => fetch(`https://www.arbeitnow.com/api/job-board-api?page=${p}`).then(r => r.json()));
+                const results = await Promise.all(promises);
+                globalJobs = results.flatMap(d => d.data);
+                loader.classList.add('hidden');
+                renderJobs(globalJobs);
+            } catch (e) {
+                loader.innerHTML = '<p class="text-red-500">Error Loading Jobs</p>';
+            }
+        }
+
+        function renderJobs(jobs) {
+            const container = document.getElementById('jobs-container');
+            container.innerHTML = '';
+            jobs.slice(0, 30).forEach(job => {
+                const tags = job.tags.slice(0,2).map(t => `<span class="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-[10px]">${t}</span>`).join('');
+                const btnText = currentLang === 'ar' ? 'تقديم' : (currentLang === 'de' ? 'Bewerben' : 'Apply');
+                const card = `
+                    <div class="glass p-5 rounded-xl hover:border-brand-primary transition-all group animate-slide-up flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between mb-3">
+                                <span class="text-xs font-bold text-slate-400">${job.location}</span>
+                                ${job.remote ? '<span class="text-[10px] bg-green-100 text-green-700 px-2 rounded-full">Remote</span>' : ''}
+                            </div>
+                            <h3 class="font-bold text-lg dark:text-white leading-tight mb-2 group-hover:text-brand-primary transition-colors line-clamp-2">${job.title}</h3>
+                            <p class="text-sm text-slate-500 mb-4">${job.company_name}</p>
+                        </div>
+                        <div>
+                            <div class="flex gap-1 mb-4">${tags}</div>
+                            <a href="${job.url}" target="_blank" class="block w-full text-center bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold py-2 rounded-lg hover:opacity-90">${btnText}</a>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        }
+
+        function filterJobs() {
+            const q = document.getElementById('job-search').value.toLowerCase();
+            const city = document.getElementById('city-filter').value;
+            const filtered = globalJobs.filter(j => 
+                (j.title.toLowerCase().includes(q) || j.company_name.toLowerCase().includes(q)) &&
+                (city === "" || j.location.includes(city))
+            );
+            renderJobs(filtered);
+        }
+
+        // --- CV Builder ---
+        function updateCV() {
+            document.getElementById('prev-name').innerText = document.getElementById('cv-name').value || 'MAX MUSTERMANN';
+            document.getElementById('prev-title').innerText = document.getElementById('cv-title').value || 'Software Engineer';
+            document.getElementById('prev-phone').innerText = document.getElementById('cv-phone').value || '+49 123 456';
+            document.getElementById('prev-email').innerText = document.getElementById('cv-email').value || 'email@example.com';
+            document.getElementById('prev-summary').innerText = document.getElementById('cv-summary').value || 'Professional summary...';
+            document.getElementById('prev-exp').innerText = document.getElementById('cv-exp').value || '- Experience details...';
+        }
+
+        function updateCVHeaders(lang) {
+            // CV Headers usually stay in German for German market, but let's adapt for international
+            const headers = {
+                ar: { contact: "اتصال", profile: "ملف شخصي", exp: "خبرات" },
+                en: { contact: "CONTACT", profile: "PROFILE", exp: "EXPERIENCE" },
+                de: { contact: "KONTAKT", profile: "PROFIL", exp: "BERUFSERFAHRUNG" }
+            };
+            document.getElementById('cv-head-contact').innerText = headers[lang].contact;
+            document.getElementById('cv-head-profile').innerText = headers[lang].profile;
+            document.getElementById('cv-head-exp').innerText = headers[lang].exp;
+        }
+
+        function downloadCV() {
+            const cvElement = document.getElementById('cv-preview');
+            html2canvas(cvElement).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `CV_${currentLang}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+            });
+        }
+
+        // --- Personalized Family Calc ---
+        let childCount = 1;
+        function adjustChild(n) {
+            childCount += n;
+            if(childCount < 1) childCount = 1;
+            document.getElementById('child-count-display').innerText = childCount;
+            updateMoney();
+        }
+
+        function updateMoney() {
+            const amount = childCount * 255;
+            document.getElementById('kg-amount').innerText = `${amount} €`;
+            document.getElementById('kg-yearly').innerText = `${(amount * 12).toLocaleString()} €`;
+        }
+
+        function checkEligibility() {
+            const dateStr = document.getElementById('birth-date').value; 
+            const msg = document.getElementById('eligibility-msg');
+            const birthDate = new Date(dateStr);
+            const year = birthDate.getFullYear();
+            
+            msg.classList.remove('hidden', 'text-green-600', 'text-red-600');
+            
+            if (year === 2025) {
+                const txt = currentLang === 'ar' ? `✅ تهانينا! طفلتك (مواليد يناير 2025) مؤهلة للزيادة فوراً.` : `✅ Eligible for 2025 increase!`;
+                msg.innerText = txt;
+                msg.classList.add('text-green-600');
+            } else {
+                const txt = currentLang === 'ar' ? `ℹ️ التاريخ المسجل: ${dateStr}` : `ℹ️ Date recorded: ${dateStr}`;
+                msg.innerText = txt;
+                msg.classList.add('text-blue-600');
+            }
+        }
+
+        // --- Chat Bot Logic ---
+        function toggleChat() {
+            document.getElementById('chat-window').classList.toggle('hidden-chat');
+        }
+
+        function handleChat(e) {
+            if(e.key === 'Enter') sendMessage();
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const msg = input.value.trim();
+            if(!msg) return;
+
+            addMsg(msg, 'user');
+            input.value = '';
+
+            setTimeout(() => {
+                let reply = "";
+                if(currentLang === 'ar') {
+                    reply = "عذراً، أنا بوت تجريبي. حاول السؤال عن: فيزا، سكن، رواتب.";
+                    if(msg.includes('فيزا')) reply = "للحصول على فيزا العمل، تحتاج عقد عمل ومعادلة شهادة.";
+                } else if (currentLang === 'de') {
+                    reply = "Entschuldigung, ich bin ein Demo-Bot. Fragen Sie nach: Visum, Wohnung, Gehalt.";
+                    if(msg.includes('Visum')) reply = "Für ein Arbeitsvisum benötigen Sie einen Arbeitsvertrag.";
+                } else {
+                    reply = "Sorry, I am a demo bot. Ask about: Visa, Housing, Salary.";
+                    if(msg.includes('Visa')) reply = "For a work visa, you need a job offer and degree recognition.";
+                }
+                addMsg(reply, 'bot');
+            }, 1000);
+        }
+
+        function addMsg(text, sender) {
+            const container = document.getElementById('chat-messages');
+            const div = document.createElement('div');
+            
+            // Layout adaptation for Chat
+            const isRtl = document.documentElement.dir === 'rtl';
+            
+            let classes = "";
+            if(sender === 'user') {
+                 classes = "bg-brand-primary text-white p-3 w-fit max-w-[85%] ";
+                 classes += isRtl ? "rounded-tr-xl rounded-tl-xl rounded-bl-xl self-end ml-auto" : "rounded-tl-xl rounded-tr-xl rounded-br-xl self-end ml-auto";
+            } else {
+                 classes = "bg-blue-100 dark:bg-slate-700 text-slate-800 dark:text-white p-3 w-fit max-w-[85%] ";
+                 classes += isRtl ? "rounded-tr-xl rounded-bl-xl rounded-br-xl" : "rounded-tl-xl rounded-br-xl rounded-bl-xl";
+            }
+            
+            div.className = classes;
+            div.innerText = text;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // --- Tools Init ---
+        function initVisaChecklist() {
+            const items = ["Passport / Reisepass", "Contract / Vertrag", "Photo / Foto", "Insurance / Versicherung"];
+            const list = document.getElementById('visa-list');
+            items.forEach(i => {
+                list.innerHTML += `<label class="flex items-center gap-2 mb-2 cursor-pointer"><input type="checkbox" class="accent-brand-primary"> <span class="dark:text-slate-300 text-sm">${i}</span></label>`;
+            });
+        }
+        
+        let map; 
+        function initMap() {
+            if(document.getElementById('germany-map')) {
+                map = L.map('germany-map').setView([51.1657, 10.4515], 6);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+                [[52.52, 13.40], [48.13, 11.58], [53.55, 9.99]].forEach(c => L.marker(c).addTo(map));
+            }
+        }
+        
+        function calcNetSalary() {
+             const gross = parseFloat(document.getElementById('gross-salary').value);
+             if(gross) {
+                 const net = (gross * 0.6) / 12;
+                 document.getElementById('net-result').innerText = `~ ${Math.round(net)} €`;
+             }
+        }
+    </script>
+</body>
+</html>
